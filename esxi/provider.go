@@ -49,6 +49,12 @@ func Provider() terraform.ResourceProvider {
 				DefaultFunc: schema.EnvDefaultFunc("esxi_password", "unset"),
 				Description: "esxi ssh password.",
 			},
+			"private_key": &schema.Schema{
+    Type:        schema.TypeString,
+    Optional:    true,
+    DefaultFunc: schema.EnvDefaultFunc("ESXI_PRIVATE_KEY", nil),
+    Description: "Path to the private SSH key for ESXi authentication",
+},
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"esxi_guest":         resourceGUEST(),
