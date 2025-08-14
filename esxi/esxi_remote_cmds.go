@@ -14,46 +14,57 @@ import (
 
 // Connect to esxi host using ssh
 func connectToHost(esxiConnInfo ConnectionStruct, attempt int) (*ssh.Client, *ssh.Session, error) {
+    var authMethods []ssh.AuthMethod
 
-	sshConfig := &ssh.ClientConfig{
-		User: esxiConnInfo.user,
-		Auth: []ssh.AuthMethod{
-			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
-				// Reply password to all questions
-				answers := make([]string, len(questions))
-				for i, _ := range answers {
-					answers[i] = esxiConnInfo.pass
-				}
+    // Если указан путь к приватному ключу
+    if esxiConnInfo.privateKeyPath != "" {
+        key, err := os.ReadFile(esxiConnInfo.privateKeyPath)
+        if err != nil {
+            return nil, nil, fmt.Errorf("unable to read private key: %s", err)
+        }
 
-				return answers, nil
-			}),
-		},
-	}
+        signer, err := ssh.ParsePrivateKey(key)
+        if err != nil {
+            return nil, nil, fmt.Errorf("unable to parse private key: %s", err)
+        }
 
-	sshConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+        authMethods = append(authMethods, ssh.PublicKeys(signer))
+    }
 
-	esxi_hostandport := fmt.Sprintf("%s:%s", esxiConnInfo.host, esxiConnInfo.port)
+    // Добавляем поддержку пароля на случай, если ключ не указан
+    authMethods = append(authMethods, ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+        answers := make([]string, len(questions))
+        for i := range answers {
+            answers[i] = esxiConnInfo.pass
+        }
+        return answers, nil
+    }))
 
-	//attempt := 10
-	for attempt > 0 {
-		client, err := ssh.Dial("tcp", esxi_hostandport, sshConfig)
-		if err != nil {
-			log.Printf("[runRemoteSshCommand] Retry connection: %d\n", attempt)
-			attempt -= 1
-			time.Sleep(1 * time.Second)
-		} else {
+    sshConfig := &ssh.ClientConfig{
+        User:            esxiConnInfo.user,
+        Auth:            authMethods,
+        HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+    }
 
-			session, err := client.NewSession()
-			if err != nil {
-				client.Close()
-				return nil, nil, fmt.Errorf("Session Connection Error")
-			}
+    esxi_hostandport := fmt.Sprintf("%s:%s", esxiConnInfo.host, esxiConnInfo.port)
 
-			return client, session, nil
+    for attempt > 0 {
+        client, err := ssh.Dial("tcp", esxi_hostandport, sshConfig)
+        if err != nil {
+            log.Printf("[connectToHost] Retry connection: %d\n", attempt)
+            attempt--
+            time.Sleep(1 * time.Second)
+        } else {
+            session, err := client.NewSession()
+            if err != nil {
+                client.Close()
+                return nil, nil, fmt.Errorf("Session Connection Error")
+            }
+            return client, session, nil
+        }
+    }
 
-		}
-	}
-	return nil, nil, fmt.Errorf("Client Connection Error")
+    return nil, nil, fmt.Errorf("Client Connection Error")
 }
 
 //  Run any remote ssh command on esxi server and return results.
