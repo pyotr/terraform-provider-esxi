@@ -11,6 +11,7 @@ type Config struct {
 	esxiHostSSLport string
 	esxiUserName    string
 	esxiPassword    string
+	esxiPrivateKeyPath string
 }
 
 func (c *Config) validateEsxiCreds() error {
