@@ -6,4 +6,5 @@ type ConnectionStruct struct {
 	sslport string
 	user    string
 	pass    string
+	privateKeyPath string
 }
